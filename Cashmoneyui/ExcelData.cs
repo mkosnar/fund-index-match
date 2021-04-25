@@ -13,12 +13,23 @@ namespace Cashmoneyui
             ep = new ExcelPackage(new FileInfo(filePath));
             Errors = new List<ExcelDataError>();
             rates = GetRates();
-            GetIndexData();
+            LoadIndexData();
         }
 
         public decimal GetRate(DateTime day)
         {
             return rates[day];
+        }
+
+        public void WriteMatches()
+        {
+            string[] sheets = { "Top stocks a Nasdaq 10Y", "Top Stock a SP 10Y", "Top Stock a DJ 10Y" };
+            foreach(var sheet in sheets)
+            {
+                var ws = ep.Workbook.Worksheets[sheet];
+                MatchSheetData(ws);
+                ep.Save();
+            }
         }
 
         ExcelPackage ep;
@@ -100,7 +111,7 @@ namespace Cashmoneyui
             return ret;
         }
 
-        private void GetIndexData()
+        private void LoadIndexData()
         {
             indexData = new Dictionary<string, Dictionary<DateTime, decimal>>();
             (string, int)[] sheets = {("Top stocks a Nasdaq 10Y", 6), ("Top Stock a SP 10Y", 7), ("Top Stock a DJ 10Y", 8)};
@@ -108,6 +119,44 @@ namespace Cashmoneyui
             {
                 indexData[sheet] = GetData(ep.Workbook.Worksheets[sheet], col);
             }
+        }
+
+        private void MatchSheetData(ExcelWorksheet ws)
+        {
+            var firstRow = ws.Dimension.Start.Row + 1;
+            var lastRow = ws.Dimension.End.Row;
+
+            for(int row = firstRow;row < lastRow;++row)
+            {
+                var cellDay = ws.Cells[row, 1];
+                var sDay = cellDay.Text;
+                if (string.IsNullOrEmpty(sDay))
+                    continue;
+                var day = DateTime.Parse(sDay);
+                (decimal indexValue, bool notReplaced) = ValueForDay(indexData[ws.Name], day);
+                (decimal rate, _) = ValueForDay(rates, day);
+
+                var indexValueCZK = indexValue * rate;
+                int targetColumn = notReplaced ? 3 : 4;
+                ws.Cells[row, targetColumn].Value = indexValueCZK;
+                if (!notReplaced)
+                {
+                    cellDay.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    cellDay.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.Yellow);
+                }
+            }
+        }
+
+        private static (decimal, bool) ValueForDay(IDictionary<DateTime, decimal> values, DateTime day)
+        {
+            var date = day;
+
+            while(!values.ContainsKey(date))
+            {
+                date = date.AddDays(-1);
+            }
+
+            return (values[date], values.ContainsKey(day));
         }
     }
 

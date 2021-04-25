@@ -35,23 +35,19 @@ namespace Cashmoneyui
 
             if (sFileName is not null && sFileName != "")
             {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
                 ed = new ExcelData(sFileName);
+                watch.Stop();
+                textBox1.Text = watch.ElapsedMilliseconds.ToString();
             }
         }
 
         private void button2_Click(object sender, EventArgs e)
         {
-            string sDate = textBox2.Text;
-            
-            try
-            {
-                var day = DateTime.Parse(sDate);
-                textBox1.Text = ed.GetRate(day).ToString();
-            }
-            catch(Exception exc)
-            {
-                textBox1.Text = exc.ToString();
-            }
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            ed.WriteMatches();
+            watch.Stop();
+            textBox2.Text = watch.ElapsedMilliseconds.ToString();
         }
     }
 }
