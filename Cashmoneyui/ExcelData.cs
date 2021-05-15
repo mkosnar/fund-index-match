@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using OfficeOpenXml;
 
 namespace Cashmoneyui
@@ -14,11 +15,6 @@ namespace Cashmoneyui
             Errors = new List<ExcelDataError>();
             rates = GetRates();
             LoadIndexData();
-        }
-
-        public decimal GetRate(DateTime day)
-        {
-            return rates[day];
         }
 
         public void WriteMatches()
@@ -40,7 +36,6 @@ namespace Cashmoneyui
         private SortedDictionary<DateTime, decimal> GetRates()
         {
             var ret = new SortedDictionary<DateTime, decimal>();
-            var missing = new HashSet<DateTime>();
 
             var ws = ep.Workbook.Worksheets["Kurz dolaru"];
             var firstRow = ws.Dimension.Start.Row + 1;
@@ -50,28 +45,14 @@ namespace Cashmoneyui
                 var cellRate = ws.Cells[row, 3];
                 var date = DateTime.Parse(ws.Cells[row, 2].Text);
                 var rateText = cellRate.Text;
-                decimal rate;
                 try
                 {
-                    rate = decimal.Parse(rateText);
+                    ret[date] = decimal.Parse(rateText);
                 }
                 catch (FormatException)
                 {
                     Errors.Add(new ExcelDataError(ws.Name, cellRate.Address, row, 3, ExcelDataErrorType.ExpectedNumeric));
-                    rate = default;
                 }
-                if (rate != default)
-                    ret[date] = rate;
-                else
-                    missing.Add(date);
-            }
-
-            foreach(var date in missing)
-            {
-                var replacementDate = date.AddDays(-1);
-                while (!ret.ContainsKey(replacementDate))
-                    replacementDate = replacementDate.AddDays(-1);
-                ret[date] = ret[replacementDate];
             }
 
             return ret;
@@ -91,21 +72,17 @@ namespace Cashmoneyui
                 var cellDate = ews.Cells[row, colDate];
                 var cellValue = ews.Cells[row, colValue];
                 if (string.IsNullOrEmpty(cellDate.Text))
-                    break;
+                    continue;
 
                 var date = DateTime.Parse(cellDate.Text);
-                decimal value;
                 try
                 {
-                    value = decimal.Parse(cellValue.Text);
+                    ret[date] = decimal.Parse(cellValue.Text);
                 }
                 catch(FormatException)
                 {
                     Errors.Add(new ExcelDataError(ews.Name, cellValue.Address, row, colValue, ExcelDataErrorType.ExpectedNumeric));
-                    value = default;
                 }
-                if (value != default)
-                    ret[date] = value;
             }
 
             return ret;
@@ -133,12 +110,15 @@ namespace Cashmoneyui
                 if (string.IsNullOrEmpty(sDay))
                     continue;
                 var day = DateTime.Parse(sDay);
+
                 (decimal indexValue, bool notReplaced) = ValueForDay(indexData[ws.Name], day);
                 (decimal rate, _) = ValueForDay(rates, day);
-
                 var indexValueCZK = indexValue * rate;
-                int targetColumn = notReplaced ? 3 : 4;
-                ws.Cells[row, targetColumn].Value = indexValueCZK;
+
+                int targetColumn = 5;
+                int targetColumnCZ = notReplaced ? 3 : 4;
+                ws.Cells[row, targetColumn].Value = indexValue;
+                ws.Cells[row, targetColumnCZ].Value = indexValueCZK;
                 if (!notReplaced)
                 {
                     cellDay.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
@@ -150,13 +130,22 @@ namespace Cashmoneyui
         private static (decimal, bool) ValueForDay(IDictionary<DateTime, decimal> values, DateTime day)
         {
             var date = day;
+            bool hasValueForDay = values.ContainsKey(day);
 
-            while(!values.ContainsKey(date))
+            if (!hasValueForDay)
             {
-                date = date.AddDays(-1);
+                if (date < values.Keys.Min())
+                    throw new IndexOutOfRangeException();
+
+                while (!values.ContainsKey(date))
+                {
+                    date = date.AddDays(-1);
+                }
+
+                values[day] = values[date];
             }
 
-            return (values[date], values.ContainsKey(day));
+            return (values[date], hasValueForDay);
         }
     }
 
