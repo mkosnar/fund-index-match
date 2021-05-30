@@ -20,10 +20,17 @@ namespace Cashmoneyui
         public void WriteMatches()
         {
             string[] sheets = { "Top stocks a Nasdaq 10Y", "Top Stock a SP 10Y", "Top Stock a DJ 10Y" };
-            foreach(var sheet in sheets)
+            try
             {
-                var ws = ep.Workbook.Worksheets[sheet];
-                MatchSheetData(ws);
+                foreach (var sheet in sheets)
+                {
+                    var ws = ep.Workbook.Worksheets[sheet];
+                    MatchSheetData(ws);
+                }
+            }
+            finally
+            {
+                WriteErrors();
                 ep.Save();
             }
         }
@@ -43,15 +50,21 @@ namespace Cashmoneyui
             for(var row = firstRow;row < lastRow;++row)
             {
                 var cellRate = ws.Cells[row, 3];
-                var date = DateTime.Parse(ws.Cells[row, 2].Text);
-                var rateText = cellRate.Text;
+                var cellDate = ws.Cells[row, 2];
+
+                if (!DateTime.TryParse(cellDate.Text, out DateTime date))
+                {
+                    Errors.Add(new ExcelDataError(ws.Name, cellDate.Address, ExcelDataErrorType.ExpectedDate));
+                    continue;
+                }
+
                 try
                 {
-                    ret[date] = decimal.Parse(rateText);
+                    ret[date] = Convert.ToDecimal(cellRate.Value);
                 }
                 catch (FormatException)
                 {
-                    Errors.Add(new ExcelDataError(ws.Name, cellRate.Address, row, 3, ExcelDataErrorType.ExpectedNumeric));
+                    Errors.Add(new ExcelDataError(ws.Name, cellRate.Address, ExcelDataErrorType.ExpectedNumeric));
                 }
             }
 
@@ -74,14 +87,19 @@ namespace Cashmoneyui
                 if (string.IsNullOrEmpty(cellDate.Text))
                     continue;
 
-                var date = DateTime.Parse(cellDate.Text);
+                if(!DateTime.TryParse(cellDate.Text, out DateTime date))
+                {
+                    Errors.Add(new ExcelDataError(ews.Name, cellDate.Address, ExcelDataErrorType.ExpectedDate));
+                    continue;
+                }
+
                 try
                 {
-                    ret[date] = decimal.Parse(cellValue.Text);
+                    ret[date] = Convert.ToDecimal(cellValue.Value);
                 }
                 catch(FormatException)
                 {
-                    Errors.Add(new ExcelDataError(ews.Name, cellValue.Address, row, colValue, ExcelDataErrorType.ExpectedNumeric));
+                    Errors.Add(new ExcelDataError(ews.Name, cellValue.Address, ExcelDataErrorType.ExpectedNumeric));
                 }
             }
 
@@ -109,7 +127,12 @@ namespace Cashmoneyui
                 var sDay = cellDay.Text;
                 if (string.IsNullOrEmpty(sDay))
                     continue;
-                var day = DateTime.Parse(sDay);
+
+                if(!DateTime.TryParse(sDay, out DateTime day))
+                {
+                    Errors.Add(new ExcelDataError(ws.Name, cellDay.Address, ExcelDataErrorType.ExpectedDate));
+                    continue;
+                }
 
                 (decimal indexValue, bool notReplaced) = ValueForDay(indexData[ws.Name], day);
                 (decimal rate, _) = ValueForDay(rates, day);
@@ -120,10 +143,25 @@ namespace Cashmoneyui
                 ws.Cells[row, targetColumn].Value = indexValue;
                 ws.Cells[row, targetColumnCZ].Value = indexValueCZK;
                 if (!notReplaced)
-                {
-                    cellDay.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
-                    cellDay.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.Yellow);
-                }
+                    SetCellColor(ref cellDay, System.Drawing.Color.Yellow);
+            }
+        }
+
+        private void WriteErrors()
+        {
+            var ws = ep.Workbook.Worksheets.Add("Chyby");
+            int row = 1;
+
+            foreach(var err in Errors)
+            {
+                var values = new[] { err.Sheet, err.Address, err.TypeString() };
+                var cellRange = ws.Cells[row, 1, row, values.Length];
+                cellRange.LoadFromText(string.Join(",", values));
+
+                if(err.Type != ExcelDataErrorType.ExpectedNumeric)
+                    SetCellColor(ref cellRange, System.Drawing.Color.Red);
+
+                ++row;
             }
         }
 
@@ -147,30 +185,43 @@ namespace Cashmoneyui
 
             return (values[date], hasValueForDay);
         }
+
+        private static void SetCellColor(ref ExcelRange cell, System.Drawing.Color color)
+        {
+            cell.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+            cell.Style.Fill.BackgroundColor.SetColor(color);
+        }
     }
 
     class ExcelDataError
     {
-        public ExcelDataError(string sheet, string addr, int row, int col, ExcelDataErrorType type)
+        public ExcelDataError(string sheet, string addr, ExcelDataErrorType type)
         {
             Sheet = sheet;
             Address = addr;
-            Row = row;
-            Column = col;
             Type = type;
         }
 
-        string Address { get; }
-        int Row { get; }
-        int Column { get; }
-        string Sheet { get; }
-        ExcelDataErrorType Type { get; }
+        public string TypeString()
+        {
+            return Type switch
+            {
+                ExcelDataErrorType.ExpectedNumeric => "ExpectedNumeric",
+                ExcelDataErrorType.ExpectedDate => "ExpectedDate",
+                ExcelDataErrorType.Other => "Other",
+                _ => "Other",
+            };
+        }
+
+        public string Address { get; }
+        public string Sheet { get; }
+        public ExcelDataErrorType Type { get; }
     }
 
     enum ExcelDataErrorType
     {
         ExpectedNumeric,
-        MissingIndexValue,
+        ExpectedDate,
         Other
     }
 }
