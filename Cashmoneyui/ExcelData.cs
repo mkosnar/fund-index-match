@@ -13,8 +13,8 @@ namespace Cashmoneyui
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
             ep = new ExcelPackage(new FileInfo(filePath));
             Errors = new List<ExcelDataError>();
-            rates = GetRates();
-            LoadIndexData();
+            rates = LoadRates();
+            indexData = LoadIndexData();
         }
 
         public void WriteMatches()
@@ -35,22 +35,24 @@ namespace Cashmoneyui
             }
         }
 
-        ExcelPackage ep;
-        SortedDictionary<DateTime, decimal> rates;
-        List<ExcelDataError> Errors;
-        Dictionary<string, Dictionary<DateTime, decimal>> indexData;
+        readonly ExcelPackage ep;
+        readonly Dictionary<DateTime, decimal> rates;
+        readonly List<ExcelDataError> Errors;
+        readonly Dictionary<string, Dictionary<DateTime, decimal>> indexData;
 
-        private SortedDictionary<DateTime, decimal> GetRates()
+        private Dictionary<DateTime, decimal> LoadRates()
         {
-            var ret = new SortedDictionary<DateTime, decimal>();
+            var ret = new Dictionary<DateTime, decimal>();
 
             var ws = ep.Workbook.Worksheets["Kurz dolaru"];
             var firstRow = ws.Dimension.Start.Row + 1;
             var lastRow = ws.Dimension.End.Row;
-            for(var row = firstRow;row < lastRow;++row)
+            var dateCol = 2;
+            var rateCol = 3;
+            for(var row = firstRow;row <= lastRow;++row)
             {
-                var cellRate = ws.Cells[row, 3];
-                var cellDate = ws.Cells[row, 2];
+                var cellRate = ws.Cells[row, rateCol];
+                var cellDate = ws.Cells[row, dateCol];
 
                 if (!DateTime.TryParse(cellDate.Text, out DateTime date))
                 {
@@ -80,7 +82,7 @@ namespace Cashmoneyui
             var firstRow = ews.Dimension.Start.Row + 1;
             var lastRow = ews.Dimension.End.Row;
 
-            for(var row = firstRow;row < lastRow;++row)
+            for(var row = firstRow;row <= lastRow;++row)
             {
                 var cellDate = ews.Cells[row, colDate];
                 var cellValue = ews.Cells[row, colValue];
@@ -106,14 +108,16 @@ namespace Cashmoneyui
             return ret;
         }
 
-        private void LoadIndexData()
+        private Dictionary<string, Dictionary<DateTime, decimal>> LoadIndexData()
         {
-            indexData = new Dictionary<string, Dictionary<DateTime, decimal>>();
+            var data = new Dictionary<string, Dictionary<DateTime, decimal>>();
             (string, int)[] sheets = {("Top stocks a Nasdaq 10Y", 6), ("Top Stock a SP 10Y", 7), ("Top Stock a DJ 10Y", 8)};
             foreach(var (sheet, col) in sheets)
             {
-                indexData[sheet] = GetData(ep.Workbook.Worksheets[sheet], col);
+                data[sheet] = GetData(ep.Workbook.Worksheets[sheet], col);
             }
+
+            return data;
         }
 
         private void MatchSheetData(ExcelWorksheet ws)
@@ -121,7 +125,7 @@ namespace Cashmoneyui
             var firstRow = ws.Dimension.Start.Row + 1;
             var lastRow = ws.Dimension.End.Row;
 
-            for(int row = firstRow;row < lastRow;++row)
+            for(int row = firstRow;row <= lastRow;++row)
             {
                 var cellDay = ws.Cells[row, 1];
                 var sDay = cellDay.Text;
@@ -134,15 +138,23 @@ namespace Cashmoneyui
                     continue;
                 }
 
-                (decimal indexValue, bool notReplaced) = ValueForDay(indexData[ws.Name], day);
-                (decimal rate, _) = ValueForDay(rates, day);
-                var indexValueCZK = indexValue * rate;
-
+                if(!TryGetValueForDay(indexData[ws.Name], day, out decimal indexValue, out bool replaced))
+                {
+                    Errors.Add(new ExcelDataError(ws.Name, cellDay.Address, ExcelDataErrorType.MissingIndexValue));
+                    continue;
+                }
                 int targetColumn = 5;
-                int targetColumnCZ = notReplaced ? 3 : 4;
                 ws.Cells[row, targetColumn].Value = indexValue;
+
+                if(!TryGetValueForDay(rates, day, out decimal rate, out _))
+                {
+                    Errors.Add(new ExcelDataError(ws.Name, cellDay.Address, ExcelDataErrorType.MissingRate));
+                    continue;
+                }
+                var indexValueCZK = indexValue * rate;
+                int targetColumnCZ = replaced ? 4 : 3;
                 ws.Cells[row, targetColumnCZ].Value = indexValueCZK;
-                if (!notReplaced)
+                if (replaced)
                     SetCellColor(ref cellDay, System.Drawing.Color.Yellow);
             }
         }
@@ -165,7 +177,7 @@ namespace Cashmoneyui
             }
         }
 
-        private static (decimal, bool) ValueForDay(IDictionary<DateTime, decimal> values, DateTime day)
+        private static bool TryGetValueForDay(IDictionary<DateTime, decimal> values, DateTime day, out decimal value, out bool replaced)
         {
             var date = day;
             bool hasValueForDay = values.ContainsKey(day);
@@ -173,7 +185,10 @@ namespace Cashmoneyui
             if (!hasValueForDay)
             {
                 if (date < values.Keys.Min())
-                    throw new IndexOutOfRangeException();
+                {
+                    (value, replaced) = (default, default);
+                    return false;
+                }
 
                 while (!values.ContainsKey(date))
                 {
@@ -183,7 +198,8 @@ namespace Cashmoneyui
                 values[day] = values[date];
             }
 
-            return (values[date], hasValueForDay);
+            (value, replaced) = (values[date], !hasValueForDay);
+            return true;
         }
 
         private static void SetCellColor(ref ExcelRange cell, System.Drawing.Color color)
@@ -208,6 +224,8 @@ namespace Cashmoneyui
             {
                 ExcelDataErrorType.ExpectedNumeric => "ExpectedNumeric",
                 ExcelDataErrorType.ExpectedDate => "ExpectedDate",
+                ExcelDataErrorType.MissingIndexValue => "MissingIndexValue",
+                ExcelDataErrorType.MissingRate => "MissingRate",
                 ExcelDataErrorType.Other => "Other",
                 _ => "Other",
             };
@@ -222,6 +240,8 @@ namespace Cashmoneyui
     {
         ExpectedNumeric,
         ExpectedDate,
+        MissingIndexValue,
+        MissingRate,
         Other
     }
 }
