@@ -43,60 +43,25 @@ namespace Cashmoneyui
 
         private Dictionary<DateTime, decimal> LoadRates()
         {
-            var ret = new Dictionary<DateTime, decimal>();
-
             var ws = ep.Workbook.Worksheets["Kurz dolaru"];
-
-            int colDate;
-            try
-            {
-                colDate = GetHeaderColumn(ws, 1);
-            }
-            catch(IndexOutOfRangeException)
-            {
-                Errors.Add(new ExcelDataError(ws.Name, "", ExcelDataErrorType.MissingHeader));
-                return ret;
-            }
-
-            int colRate = colDate + 1;
-
-            int firstRow = ws.Dimension.Start.Row + 1;
-            int lastRow = ws.Dimension.End.Row;
-
-            for(var row = firstRow;row <= lastRow;++row)
-            {
-                var cellRate = ws.Cells[row, colRate];
-                var cellDate = ws.Cells[row, colDate];
-
-                if (!DateTime.TryParse(cellDate.Text, out DateTime date))
-                {
-                    Errors.Add(new ExcelDataError(ws.Name, cellDate.Address, ExcelDataErrorType.ExpectedDate));
-                    continue;
-                }
-
-                try
-                {
-                    ret[date] = Convert.ToDecimal(cellRate.Value);
-                }
-                catch (FormatException)
-                {
-                    Errors.Add(new ExcelDataError(ws.Name, cellRate.Address, ExcelDataErrorType.ExpectedNumeric));
-                }
-            }
-
-            return ret;
+            return MapData(ws, 1);
         }
 
         private Dictionary<DateTime, decimal> GetData(ExcelWorksheet ews)
+        {
+            return MapData(ews, 3);
+        }
+
+        private Dictionary<DateTime, decimal> MapData(ExcelWorksheet ews, int headerPos)
         {
             var ret = new Dictionary<DateTime, decimal>();
 
             int colDate;
             try
             {
-                colDate = GetHeaderColumn(ews, 3);
+                colDate = GetHeaderColumn(ews, headerPos);
             }
-            catch(IndexOutOfRangeException)
+            catch (IndexOutOfRangeException)
             {
                 Errors.Add(new ExcelDataError(ews.Name, "", ExcelDataErrorType.MissingHeader));
                 return ret;
@@ -107,14 +72,14 @@ namespace Cashmoneyui
             int firstRow = ews.Dimension.Start.Row + 1;
             int lastRow = ews.Dimension.End.Row;
 
-            for(var row = firstRow;row <= lastRow;++row)
+            for (var row = firstRow; row <= lastRow; ++row)
             {
                 var cellDate = ews.Cells[row, colDate];
                 var cellValue = ews.Cells[row, colValue];
                 if (string.IsNullOrEmpty(cellDate.Text))
                     continue;
 
-                if(!DateTime.TryParse(cellDate.Text, out DateTime date))
+                if (!DateTime.TryParse(cellDate.Text, out DateTime date))
                 {
                     Errors.Add(new ExcelDataError(ews.Name, cellDate.Address, ExcelDataErrorType.ExpectedDate));
                     continue;
@@ -124,7 +89,7 @@ namespace Cashmoneyui
                 {
                     ret[date] = Convert.ToDecimal(cellValue.Value);
                 }
-                catch(FormatException)
+                catch (FormatException)
                 {
                     Errors.Add(new ExcelDataError(ews.Name, cellValue.Address, ExcelDataErrorType.ExpectedNumeric));
                 }
