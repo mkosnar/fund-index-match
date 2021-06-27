@@ -36,7 +36,7 @@ namespace Cashmoneyui
             if (sFileName is not null && sFileName != "")
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
-                ed = new ExcelData(sFileName);
+                ed = new ExcelData(sFileName, 3);
                 watch.Stop();
                 textBox1.Text = watch.ElapsedMilliseconds.ToString();
             }

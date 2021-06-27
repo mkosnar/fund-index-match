@@ -8,23 +8,23 @@ namespace Cashmoneyui
 {
     class ExcelData
     {
-        public ExcelData(string filePath)
+        public ExcelData(string filePath, int dataSheetCount)
         {
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
             ep = new ExcelPackage(new FileInfo(filePath));
             Errors = new List<ExcelDataError>();
+            this.dataSheetCount = dataSheetCount;
             rates = LoadRates();
             indexData = LoadIndexData();
         }
 
         public void WriteMatches()
         {
-            string[] sheets = { "Top stocks a Nasdaq 10Y", "Top Stock a SP 10Y", "Top Stock a DJ 10Y" };
             try
             {
-                foreach (var sheet in sheets)
+                foreach (var sheetName in indexData.Keys)
                 {
-                    var ws = ep.Workbook.Worksheets[sheet];
+                    var ws = ep.Workbook.Worksheets[sheetName];
                     MatchSheetData(ws);
                 }
             }
@@ -39,20 +39,34 @@ namespace Cashmoneyui
         readonly Dictionary<DateTime, decimal> rates;
         readonly List<ExcelDataError> Errors;
         readonly Dictionary<string, Dictionary<DateTime, decimal>> indexData;
+        readonly int dataSheetCount;
 
         private Dictionary<DateTime, decimal> LoadRates()
         {
             var ret = new Dictionary<DateTime, decimal>();
 
             var ws = ep.Workbook.Worksheets["Kurz dolaru"];
-            var firstRow = ws.Dimension.Start.Row + 1;
-            var lastRow = ws.Dimension.End.Row;
-            var dateCol = 2;
-            var rateCol = 3;
+
+            int colDate;
+            try
+            {
+                colDate = GetHeaderColumn(ws, 1);
+            }
+            catch(IndexOutOfRangeException)
+            {
+                Errors.Add(new ExcelDataError(ws.Name, "", ExcelDataErrorType.MissingHeader));
+                return ret;
+            }
+
+            int colRate = colDate + 1;
+
+            int firstRow = ws.Dimension.Start.Row + 1;
+            int lastRow = ws.Dimension.End.Row;
+
             for(var row = firstRow;row <= lastRow;++row)
             {
-                var cellRate = ws.Cells[row, rateCol];
-                var cellDate = ws.Cells[row, dateCol];
+                var cellRate = ws.Cells[row, colRate];
+                var cellDate = ws.Cells[row, colDate];
 
                 if (!DateTime.TryParse(cellDate.Text, out DateTime date))
                 {
@@ -73,14 +87,25 @@ namespace Cashmoneyui
             return ret;
         }
 
-        private Dictionary<DateTime, decimal> GetData(ExcelWorksheet ews, int colFrom)
+        private Dictionary<DateTime, decimal> GetData(ExcelWorksheet ews)
         {
             var ret = new Dictionary<DateTime, decimal>();
 
-            int colDate = colFrom;
-            int colValue = colFrom + 1;
-            var firstRow = ews.Dimension.Start.Row + 1;
-            var lastRow = ews.Dimension.End.Row;
+            int colDate;
+            try
+            {
+                colDate = GetHeaderColumn(ews, 3);
+            }
+            catch(IndexOutOfRangeException)
+            {
+                Errors.Add(new ExcelDataError(ews.Name, "", ExcelDataErrorType.MissingHeader));
+                return ret;
+            }
+
+            int colValue = colDate + 1;
+
+            int firstRow = ews.Dimension.Start.Row + 1;
+            int lastRow = ews.Dimension.End.Row;
 
             for(var row = firstRow;row <= lastRow;++row)
             {
@@ -111,10 +136,15 @@ namespace Cashmoneyui
         private Dictionary<string, Dictionary<DateTime, decimal>> LoadIndexData()
         {
             var data = new Dictionary<string, Dictionary<DateTime, decimal>>();
-            (string, int)[] sheets = {("Top stocks a Nasdaq 10Y", 6), ("Top Stock a SP 10Y", 7), ("Top Stock a DJ 10Y", 8)};
-            foreach(var (sheet, col) in sheets)
+
+            int sheetIndex = 0;
+            foreach(var sheet in ep.Workbook.Worksheets)
             {
-                data[sheet] = GetData(ep.Workbook.Worksheets[sheet], col);
+                if (sheetIndex >= dataSheetCount)
+                    break;
+
+                data[sheet.Name] = GetData(sheet);
+                ++sheetIndex;
             }
 
             return data;
@@ -207,6 +237,22 @@ namespace Cashmoneyui
             cell.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
             cell.Style.Fill.BackgroundColor.SetColor(color);
         }
+
+        /*
+         * Returns the column address of the pos-th cell containing data in the first row of ws.
+         */
+        private static int GetHeaderColumn(ExcelWorksheet ws, int pos)
+        {
+            var cells = ws.Cells[1, 1, 1, ws.Dimension.End.Column];
+            int cur = 1;
+            foreach(var cell in cells)
+            {
+                if (cur == pos)
+                    return cell.Start.Column;
+                ++cur;
+            }
+            throw new IndexOutOfRangeException();
+        }
     }
 
     class ExcelDataError
@@ -226,6 +272,7 @@ namespace Cashmoneyui
                 ExcelDataErrorType.ExpectedDate => "ExpectedDate",
                 ExcelDataErrorType.MissingIndexValue => "MissingIndexValue",
                 ExcelDataErrorType.MissingRate => "MissingRate",
+                ExcelDataErrorType.MissingHeader => "MissingHeader",
                 ExcelDataErrorType.Other => "Other",
                 _ => "Other",
             };
@@ -242,6 +289,7 @@ namespace Cashmoneyui
         ExpectedDate,
         MissingIndexValue,
         MissingRate,
+        MissingHeader,
         Other
     }
 }
