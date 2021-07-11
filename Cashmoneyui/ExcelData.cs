@@ -156,10 +156,16 @@ namespace Cashmoneyui
 
         private void WriteErrors()
         {
-            var ws = ep.Workbook.Worksheets.Add("Chyby");
+            string errWsName = "Chyby";
+            var wb = ep.Workbook;
+            var errWs = wb.Worksheets.SingleOrDefault(x => x.Name == errWsName);
+            if (errWs is not null)
+                wb.Worksheets.Delete(errWs);
+
+            var ws = wb.Worksheets.Add(errWsName);
             int row = 1;
 
-            foreach(var err in Errors)
+            foreach (var err in Errors)
             {
                 var values = new[] { err.Sheet, err.Address, err.TypeString() };
                 var cellRange = ws.Cells[row, 1, row, values.Length];
