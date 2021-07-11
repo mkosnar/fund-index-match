@@ -1,14 +1,5 @@
 ﻿using System;
-using System.IO;
-//using System.Collections.Generic;
-//using System.ComponentModel;
-//using System.Data;
-//using System.Drawing;
-//using System.Linq;
-//using System.Text;
-//using System.Threading.Tasks;
 using System.Windows.Forms;
-using OfficeOpenXml;
 
 namespace Cashmoneyui
 {
@@ -19,15 +10,15 @@ namespace Cashmoneyui
             InitializeComponent();
         }
 
-        string sFileName;
         ExcelData ed;
 
-        private void button1_Click(object sender, EventArgs e)
+        private void buttonLoad_Click(object sender, EventArgs e)
         {
             openFileDialog1.Title = "Excel File to Edit";
             openFileDialog1.FileName = "";
             openFileDialog1.Filter = "Excel File|*.xlsx;*.xls";
 
+            string sFileName = "";
             if (openFileDialog1.ShowDialog() == DialogResult.OK)
             {
                 sFileName = openFileDialog1.FileName;
@@ -38,16 +29,16 @@ namespace Cashmoneyui
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 ed = new ExcelData(sFileName, 3);
                 watch.Stop();
-                textBox1.Text = watch.ElapsedMilliseconds.ToString();
+                textBoxLoadTime.Text = watch.ElapsedMilliseconds.ToString();
             }
         }
 
-        private void button2_Click(object sender, EventArgs e)
+        private void buttonWrite_Click(object sender, EventArgs e)
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
             ed.WriteMatches();
             watch.Stop();
-            textBox2.Text = watch.ElapsedMilliseconds.ToString();
+            textBoxWriteTime.Text = watch.ElapsedMilliseconds.ToString();
         }
     }
 }
