@@ -1,5 +1,5 @@
 ﻿
-namespace Cashmoneyui
+namespace FundIndexMatch
 {
     partial class Form1
     {

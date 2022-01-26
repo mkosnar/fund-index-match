@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Windows.Forms;
 
-namespace Cashmoneyui
+namespace FundIndexMatch
 {
     public partial class Form1 : Form
     {

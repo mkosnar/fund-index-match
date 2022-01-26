@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using OfficeOpenXml;
 
-namespace Cashmoneyui
+namespace FundIndexMatch
 {
     class ExcelData
     {
@@ -12,6 +12,7 @@ namespace Cashmoneyui
         {
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
             ep = new ExcelPackage(new FileInfo(filePath));
+
             Errors = new List<ExcelDataError>();
             this.dataSheetCount = dataSheetCount;
             rates = LoadRates();
