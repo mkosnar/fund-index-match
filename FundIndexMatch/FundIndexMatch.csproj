@@ -22,4 +22,8 @@
     <PackageReference Include="EPPlus" Version="5.5.5" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="test_data\" />
+  </ItemGroup>
+
 </Project>
