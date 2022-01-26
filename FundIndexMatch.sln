@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.31025.194
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FundIndexMatch", "Cashmoneyui\FundIndexMatch.csproj", "{DC463BD7-0098-4661-A4CC-A43FB5F7880F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FundIndexMatch", "FundIndexMatch\FundIndexMatch.csproj", "{DC463BD7-0098-4661-A4CC-A43FB5F7880F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
